@@ -62,7 +62,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
                       final subtitle = 'Status : ${queueObject.statusText}'
                           '\nMessage : ${queueObject.message}'
-                          '\nSize : ${filesize(queueObject.size)}';
+                          '\nSize : ${filesize(queueObject.size)}'
+                          '\nCreated : ${queueObject.createdAt}'
+                          '\ndata : ${queueObject.data}';
 
                       return ListTile(
                         leading: Image.file(File(queueObject.path)),
@@ -118,6 +120,10 @@ class _MyHomePageState extends State<MyHomePage> {
             queueObject.size = await _file.length();
             queueObject.path = path;
             queueObject.type = 'image';
+            queueObject.data = {
+              'name': basename,
+              'message': queueObject.message,
+            };
             box.put(queueObject.id, queueObject);
           }
         },

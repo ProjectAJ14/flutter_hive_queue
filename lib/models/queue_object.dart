@@ -12,6 +12,8 @@ class QueueObject {
     message = '';
     size = 0.0;
     status = 0.0;
+    createdAt = DateTime.now();
+    data = {};
   }
 
   @HiveField(0, defaultValue: '')
@@ -35,6 +37,12 @@ class QueueObject {
   // status of the file 0: not started, 1: in progress, 2: finished, 3: failed
   @HiveField(6, defaultValue: 0.0)
   late num status;
+
+  @HiveField(7)
+  late DateTime? createdAt;
+
+  @HiveField(8)
+  Map<String, String>? data;
 
   String get statusText {
     switch (status) {
@@ -60,6 +68,8 @@ class QueueObject {
       'message': message,
       'size': size,
       'status': status,
+      'createdAt': createdAt,
+      'data': data,
     };
   }
 }

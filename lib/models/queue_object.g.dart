@@ -23,13 +23,15 @@ class QueueObjectAdapter extends TypeAdapter<QueueObject> {
       ..type = fields[3] == null ? '' : fields[3] as String
       ..message = fields[4] == null ? '' : fields[4] as String
       ..size = fields[5] == null ? 0.0 : fields[5] as num
-      ..status = fields[6] == null ? 0.0 : fields[6] as num;
+      ..status = fields[6] == null ? 0.0 : fields[6] as num
+      ..createdAt = fields[7] as DateTime?
+      ..data = (fields[8] as Map?)?.cast<String, String>();
   }
 
   @override
   void write(BinaryWriter writer, QueueObject obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -43,7 +45,11 @@ class QueueObjectAdapter extends TypeAdapter<QueueObject> {
       ..writeByte(5)
       ..write(obj.size)
       ..writeByte(6)
-      ..write(obj.status);
+      ..write(obj.status)
+      ..writeByte(7)
+      ..write(obj.createdAt)
+      ..writeByte(8)
+      ..write(obj.data);
   }
 
   @override
