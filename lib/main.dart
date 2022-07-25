@@ -1,115 +1,137 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
 
-void main() {
+import 'package:filesize/filesize.dart';
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as package_path;
+import 'package:path_provider/path_provider.dart';
+
+import 'models/queue_object.dart';
+
+void main() async {
+  await Hive.initFlutter();
+  Hive.registerAdapter(QueueObjectAdapter());
+
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  const MyHomePage({Key? key}) : super(key: key);
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Hive Queue'),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
+      body: FutureBuilder<Box<QueueObject>>(
+        future: Hive.openBox<QueueObject>('QueueObject'),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data != null) {
+            return ValueListenableBuilder(
+              valueListenable: snapshot.data!.listenable(),
+              builder: (BuildContext context, box, Widget? child) {
+                if (box is Box<QueueObject>) {
+                  final List<QueueObject> queue = box.values.toList();
+
+                  return ListView.builder(
+                    itemCount: queue.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final QueueObject queueObject = queue.elementAt(index);
+
+                      final subtitle = 'Status : ${queueObject.statusText}'
+                          '\nMessage : ${queueObject.message}'
+                          '\nSize : ${filesize(queueObject.size)}';
+
+                      return ListTile(
+                        leading: Image.file(File(queueObject.path)),
+                        title: Text(queueObject.name),
+                        subtitle: Text(subtitle),
+                        onTap: () async {
+                          //delete the object
+                          await box.deleteAt(index);
+                        },
+                        onLongPress: () async {
+                          //update the object
+                          final QueueObject queueObject =
+                              queue.elementAt(index);
+
+                          queueObject.status = 2;
+                          box.put(queueObject.id, queueObject);
+                        },
+                      );
+                    },
+                  );
+                }
+
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
+              },
+            );
+          }
+          return const Center(child: CircularProgressIndicator());
+        },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
         child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+        onPressed: () async {
+          final ImagePicker _picker = ImagePicker();
+
+          final XFile? _file = await _picker.pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 50,
+          );
+          // Save the image to phone storage.
+          if (_file != null) {
+            final path = await copyFileToLocal(File(_file.path));
+            String basename = package_path.basename(_file.path);
+
+            final box = await Hive.openBox<QueueObject>('QueueObject');
+            QueueObject queueObject = QueueObject();
+            queueObject.id = '${box.values.length + 1}';
+            queueObject.name = basename;
+            queueObject.message =
+                'This is a message for file ${queueObject.id}';
+            queueObject.status = 0;
+            queueObject.size = await _file.length();
+            queueObject.path = path;
+            queueObject.type = 'image';
+            box.put(queueObject.id, queueObject);
+          }
+        },
+      ),
     );
+  }
+
+  Future<String> copyFileToLocal(File file) async {
+    debugPrint('FileService.copyFileToLocal[${file.path}]');
+    Directory appDocDir = await getApplicationDocumentsDirectory();
+    final directory = appDocDir.path;
+    final tempFile = File('$directory/${file.path.split('/').last}');
+    await tempFile.writeAsBytes(await file.readAsBytes());
+    debugPrint('copyFileToLocal.copied[${tempFile.path}]');
+    return tempFile.path;
   }
 }
